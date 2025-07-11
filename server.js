@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-
+console.log("🧭 Loaded env vars:", Object.keys(process.env));
 // Load environment variables
 dotenv.config();
 console.log("🔑 OPENAI_API_KEY set:", !!process.env.OPENAI_API_KEY);
