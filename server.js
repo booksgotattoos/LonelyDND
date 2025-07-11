@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 
 // Load environment variables
 dotenv.config();
-
+console.log("🔑 OPENAI_API_KEY set:", !!process.env.OPENAI_API_KEY);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
