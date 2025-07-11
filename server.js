@@ -285,7 +285,7 @@ function seedData() {
 
 // Initialize with seed data
 seedData();
-
+console.log('█ Seeded characters:', gameData.characters);
 // Spells endpoint
 app.get('/api/spells', (req, res) => {
   res.json(gameData.spells || []);
