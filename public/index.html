@@ -1,92 +1,221 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>LonelyDND</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lonely DND - Character Builder & Chat</title>
   <style>
     body {
-      font-family: 'Georgia', serif;
-      background: #111;
-      color: #eee;
-      padding: 2rem;
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 0 15px;
     }
-    textarea, input {
-      width: 100%;
-      padding: 0.5rem;
-      font-size: 1rem;
-      margin-top: 1rem;
-      border-radius: 5px;
-      border: none;
+    #chatMessages {
+      border: 1px solid #ccc;
+      height: 300px;
+      overflow-y: auto;
+      padding: 10px;
+      background: #f9f9f9;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
     }
-    .chat {
-      margin-top: 2rem;
-      background: #222;
-      padding: 1rem;
-      border-radius: 10px;
+    #chatMessages div {
+      margin-bottom: 8px;
     }
-    .message {
-      margin-bottom: 1rem;
+    #chatMessages .player {
+      font-weight: bold;
+      color: #2a7ae2;
     }
-    .assistant {
-      color: #00ffcc;
+    #chatMessages .dm {
+      color: #555;
     }
-    .user {
-      color: #fff;
-    }
-    img {
-      margin-top: 1rem;
-      max-width: 100%;
-      border-radius: 8px;
+    #startSessionBtn {
+      margin-top: 15px;
+      padding: 8px 12px;
+      font-size: 16px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <h1>🧙 Lonely DND</h1>
-  <div class="chat" id="chat"></div>
+  <h1>Lonely D&D — Character Builder</h1>
 
-  <form id="dmForm">
-    <textarea id="userMessage" placeholder="What does your character do?" rows="3"></textarea>
-    <input type="submit" value="Send to DM" />
+  <form id="characterForm">
+    <input name="name" placeholder="Name" required />
+    <input name="class" placeholder="Class" required />
+    <input name="level" type="number" min="1" max="20" placeholder="Level" required />
+    <input name="race" placeholder="Race" required />
+    <button type="submit">Create Character</button>
   </form>
 
+  <h2>Saved Characters</h2>
+  <ul id="charactersList"></ul>
+
+  <button id="startSessionBtn" style="display: none;">Start Game Session</button>
+
+  <!-- Chat container (hidden initially) -->
+  <div id="chatContainer" style="display:none; margin-top: 20px;">
+    <div id="chatMessages"></div>
+    <input type="text" id="chatInput" placeholder="Type your message..." style="width: 80%;" />
+    <button id="sendBtn">Send</button>
+  </div>
+
   <script>
-    const chatEl = document.getElementById('chat');
-    const form = document.getElementById('dmForm');
-    const input = document.getElementById('userMessage');
+    const form = document.getElementById('characterForm');
+    const charactersList = document.getElementById('charactersList');
+    const startSessionBtn = document.getElementById('startSessionBtn');
+    const chatContainer = document.getElementById('chatContainer');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendBtn');
 
-    // Use your actual character ID here
-    const characterId = ''; // Leave blank for now
-    const sessionId = 'demo-session-1';
+    let selectedCharacterId = '';
+    let currentSession = null;
 
-    function addMessage(role, text, imageUrl = null) {
-      const div = document.createElement('div');
-      div.className = `message ${role}`;
-      div.innerHTML = `<strong>${role === 'user' ? 'You' : 'DM'}:</strong> ${text}`;
-      if (imageUrl) {
-        const img = document.createElement('img');
-        img.src = imageUrl;
-        div.appendChild(img);
+    // Load and display saved characters
+    async function loadCharacters() {
+      try {
+        const res = await fetch('/api/characters');
+        const characters = await res.json();
+        charactersList.innerHTML = '';
+        characters.forEach(c => {
+          const li = document.createElement('li');
+          li.textContent = `${c.name} - Level ${c.level} ${c.race} ${c.class}`;
+          li.style.cursor = 'pointer';
+          li.onclick = () => {
+            selectedCharacterId = c.id;
+            alert(`Selected character: ${c.name}`);
+            showStartSessionButton();
+          };
+          charactersList.appendChild(li);
+        });
+      } catch (err) {
+        console.error('Error loading characters:', err);
+        alert('Failed to load characters.');
       }
-      chatEl.appendChild(div);
-      chatEl.scrollTop = chatEl.scrollHeight;
     }
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const message = input.value.trim();
+    // Show the Start Session button when a character is selected
+    function showStartSessionButton() {
+      startSessionBtn.style.display = 'inline-block';
+    }
+
+    // Append message to chat box
+    function appendMessage(text, from = 'dm') {
+      const msgDiv = document.createElement('div');
+      msgDiv.textContent = (from === 'player' ? 'You: ' : 'DM: ') + text;
+      msgDiv.className = from;
+      chatMessages.appendChild(msgDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Show chat interface
+    function showChat() {
+      chatContainer.style.display = 'block';
+      chatInput.focus();
+    }
+
+    // Fetch or create a game session for the selected character
+    async function fetchOrCreateSession(characterId) {
+      try {
+        const res = await fetch(`/api/characters/${characterId}/game-sessions`);
+        const sessions = await res.json();
+
+        if (sessions.length > 0) {
+          currentSession = sessions[0];
+          console.log('Resuming session:', currentSession);
+        } else {
+          const response = await fetch('/api/dm/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              characterId,
+              message: "Begin my adventure",
+            })
+          });
+          const data = await response.json();
+          currentSession = data.session;
+          console.log('New session started:', currentSession);
+        }
+
+        alert(`Session ready! Session ID: ${currentSession.id}`);
+        showChat();
+      } catch (err) {
+        console.error('Error starting session:', err);
+        alert('Failed to start or resume session.');
+      }
+    }
+
+    // Handle sending chat messages
+    sendBtn.onclick = async () => {
+      const message = chatInput.value.trim();
       if (!message) return;
 
-      addMessage('user', message);
-      input.value = '';
+      appendMessage(message, 'player');
+      chatInput.value = '';
 
-      const res = await fetch('/api/dm/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, characterId, sessionId })
-      });
+      try {
+        const response = await fetch('/api/dm/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            characterId: selectedCharacterId,
+            sessionId: currentSession.id,
+            message,
+          }),
+        });
 
-      const data = await res.json();
-      addMessage('assistant', data.dmResponse.message, data.dmResponse.imageUrl);
-    });
+        const data = await response.json();
+        appendMessage(data.reply || 'No reply from DM.', 'dm');
+      } catch (err) {
+        console.error('Error sending message:', err);
+        appendMessage('Error sending message.', 'dm');
+      }
+    };
+
+    // Handle character form submission
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const newChar = {};
+      formData.forEach((v, k) => newChar[k] = v);
+      newChar.level = parseInt(newChar.level, 10);
+      newChar.currentHp = 10;
+      newChar.maxHp = 10;
+      newChar.armorClass = 12;
+
+      try {
+        const res = await fetch('/api/characters', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newChar),
+        });
+
+        if (res.ok) {
+          alert('Character created!');
+          form.reset();
+          loadCharacters();
+        } else {
+          alert('Failed to create character.');
+        }
+      } catch (err) {
+        console.error('Error creating character:', err);
+        alert('Failed to create character.');
+      }
+    };
+
+    // Show Start Session button when clicked
+    startSessionBtn.onclick = () => {
+      if (!selectedCharacterId) {
+        alert('Please select a character first!');
+        return;
+      }
+      fetchOrCreateSession(selectedCharacterId);
+    };
+
+    // Initial load of characters
+    loadCharacters();
   </script>
 </body>
 </html>
