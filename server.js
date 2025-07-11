@@ -12,7 +12,9 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
-
+app.get('/', (req, res) => {
+  res.send('🧙‍♂️ Welcome to Lonely D&D! The server is live. Try hitting /health or /api/characters.');
+});
 // In-memory storage for game data
 let gameData = {
   characters: [],
